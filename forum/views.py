@@ -14,6 +14,12 @@ class BoardListView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+        slug = request.data.get("slug")
+        if Board.objects.filter(slug=slug).exists():
+            return Response(
+                {"detail": f"Дошка /{slug}/ вже існує. Оберіть інший код."},
+                status=status.HTTP_409_CONFLICT,
+            )
         serializer = BoardSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
