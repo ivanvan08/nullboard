@@ -59,6 +59,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "forum.exceptions.api_exception_handler",
+}
+
 ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
