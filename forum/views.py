@@ -1,13 +1,19 @@
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .exceptions import Conflict
-from .models import Board, Tag, Thread
-from .serializers import BoardSerializer, TagSerializer, ThreadSerializer
+from .models import Board, Post, Tag, Thread
+from .serializers import (
+    BoardSerializer,
+    PostSerializer,
+    TagSerializer,
+    ThreadSerializer,
+)
 
-THREAD_ORDERING_FIELDS = ["bumped_at", "created_at"]
+THREAD_ORDERING_FIELDS = ["bumped_at", "created_at", "reply_count"]
 
 
 class BoardListView(APIView):
@@ -94,7 +100,7 @@ class ThreadListView(APIView):
             raise serializers.ValidationError(
                 {"ordering": [f"Unknown ordering. Allowed fields: {allowed}."]}
             )
-        threads = Thread.objects.order_by(ordering)
+        threads = Thread.objects.annotate(reply_count=Count("posts")).order_by(ordering)
         serializer = ThreadSerializer(threads, many=True)
         return Response(serializer.data)
 
@@ -121,4 +127,44 @@ class ThreadDetailView(APIView):
     def delete(self, request, pk):
         thread = get_object_or_404(Thread, pk=pk)
         thread.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ThreadPostListView(APIView):
+    def get(self, request, pk):
+        thread = get_object_or_404(Thread, pk=pk)
+        posts = thread.posts.order_by("created_at")
+        serializer = PostSerializer(posts, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, pk):
+        thread = get_object_or_404(Thread, pk=pk)
+        if thread.is_locked:
+            raise Conflict(
+                f"Thread #{thread.pk} is locked. New replies are not allowed."
+            )
+        serializer = PostSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        post = serializer.save(thread=thread)
+        thread.bumped_at = post.created_at
+        thread.save(update_fields=["bumped_at"])
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class PostDetailView(APIView):
+    def get(self, request, pk):
+        post = get_object_or_404(Post, pk=pk)
+        serializer = PostSerializer(post)
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        post = get_object_or_404(Post, pk=pk)
+        serializer = PostSerializer(post, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        post = get_object_or_404(Post, pk=pk)
+        post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

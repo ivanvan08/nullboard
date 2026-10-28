@@ -3,10 +3,12 @@ from django.urls import path
 from .views import (
     BoardDetailView,
     BoardListView,
+    PostDetailView,
     TagDetailView,
     TagListView,
     ThreadDetailView,
     ThreadListView,
+    ThreadPostListView,
 )
 
 urlpatterns = [
@@ -16,4 +18,10 @@ urlpatterns = [
     path("tags/<slug:slug>/", TagDetailView.as_view(), name="tag-detail"),
     path("threads/", ThreadListView.as_view(), name="thread-list"),
     path("threads/<int:pk>/", ThreadDetailView.as_view(), name="thread-detail"),
+    path(
+        "threads/<int:pk>/posts/",
+        ThreadPostListView.as_view(),
+        name="thread-post-list",
+    ),
+    path("posts/<int:pk>/", PostDetailView.as_view(), name="post-detail"),
 ]

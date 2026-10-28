@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Board, Tag, Thread
+from .models import Board, Post, Tag, Thread
 
 
 class BoardSerializer(serializers.ModelSerializer):
@@ -34,6 +34,7 @@ class ThreadSerializer(serializers.ModelSerializer):
     tags = serializers.SlugRelatedField(
         slug_field="slug", queryset=Tag.objects.all(), many=True, required=False
     )
+    reply_count = serializers.IntegerField(source="posts.count", read_only=True)
 
     class Meta:
         model = Thread
@@ -46,6 +47,7 @@ class ThreadSerializer(serializers.ModelSerializer):
             "tags",
             "is_pinned",
             "is_locked",
+            "reply_count",
             "created_at",
             "bumped_at",
         ]
@@ -57,3 +59,10 @@ class ThreadSerializer(serializers.ModelSerializer):
                 "Thread cannot be moved to another board."
             )
         return value
+
+
+class PostSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Post
+        fields = ["id", "thread", "name", "body", "created_at"]
+        read_only_fields = ["thread", "created_at"]
