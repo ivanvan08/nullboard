@@ -95,7 +95,7 @@ class TagDetailView(APIView):
 class ThreadListView(APIView):
     def get(self, request):
         ordering = request.query_params.get("ordering", "-bumped_at")
-        if ordering.lstrip("-") not in THREAD_ORDERING_FIELDS:
+        if ordering.removeprefix("-") not in THREAD_ORDERING_FIELDS:
             allowed = ", ".join(THREAD_ORDERING_FIELDS)
             raise serializers.ValidationError(
                 {"ordering": [f"Unknown ordering. Allowed fields: {allowed}."]}
