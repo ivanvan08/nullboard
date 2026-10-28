@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .exceptions import Conflict
-from .models import Board
-from .serializers import BoardSerializer
+from .models import Board, Tag
+from .serializers import BoardSerializer, TagSerializer
 
 
 class BoardListView(APIView):
@@ -40,4 +40,39 @@ class BoardDetailView(APIView):
     def delete(self, request, slug):
         board = get_object_or_404(Board, slug=slug)
         board.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TagListView(APIView):
+    def get(self, request):
+        tags = Tag.objects.all()
+        serializer = TagSerializer(tags, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        slug = request.data.get("slug")
+        if Tag.objects.filter(slug=slug).exists():
+            raise Conflict(f"Tag '{slug}' already exists. Choose another slug.")
+        serializer = TagSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class TagDetailView(APIView):
+    def get(self, request, slug):
+        tag = get_object_or_404(Tag, slug=slug)
+        serializer = TagSerializer(tag)
+        return Response(serializer.data)
+
+    def patch(self, request, slug):
+        tag = get_object_or_404(Tag, slug=slug)
+        serializer = TagSerializer(tag, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, slug):
+        tag = get_object_or_404(Tag, slug=slug)
+        tag.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
