@@ -10,5 +10,5 @@ class BoardSerializer(serializers.ModelSerializer):
 
     def validate_slug(self, value):
         if self.instance and value != self.instance.slug:
-            raise serializers.ValidationError("Код дошки змінити не можна.")
+            raise serializers.ValidationError("Board slug cannot be changed.")
         return value
