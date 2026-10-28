@@ -1,11 +1,13 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .exceptions import Conflict
-from .models import Board, Tag
-from .serializers import BoardSerializer, TagSerializer
+from .models import Board, Tag, Thread
+from .serializers import BoardSerializer, TagSerializer, ThreadSerializer
+
+THREAD_ORDERING_FIELDS = ["bumped_at", "created_at"]
 
 
 class BoardListView(APIView):
@@ -74,5 +76,49 @@ class TagDetailView(APIView):
 
     def delete(self, request, slug):
         tag = get_object_or_404(Tag, slug=slug)
+        thread_count = tag.threads.count()
+        if thread_count:
+            raise Conflict(
+                f"Tag '{slug}' cannot be deleted: it is used by {thread_count} "
+                "thread(s). Remove the tag from these threads first."
+            )
         tag.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ThreadListView(APIView):
+    def get(self, request):
+        ordering = request.query_params.get("ordering", "-bumped_at")
+        if ordering.lstrip("-") not in THREAD_ORDERING_FIELDS:
+            allowed = ", ".join(THREAD_ORDERING_FIELDS)
+            raise serializers.ValidationError(
+                {"ordering": [f"Unknown ordering. Allowed fields: {allowed}."]}
+            )
+        threads = Thread.objects.order_by(ordering)
+        serializer = ThreadSerializer(threads, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = ThreadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ThreadDetailView(APIView):
+    def get(self, request, pk):
+        thread = get_object_or_404(Thread, pk=pk)
+        serializer = ThreadSerializer(thread)
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        thread = get_object_or_404(Thread, pk=pk)
+        serializer = ThreadSerializer(thread, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        thread = get_object_or_404(Thread, pk=pk)
+        thread.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

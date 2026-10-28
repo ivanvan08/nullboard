@@ -1,12 +1,14 @@
 from rest_framework import serializers
 
-from .models import Board, Tag
+from .models import Board, Tag, Thread
 
 
 class BoardSerializer(serializers.ModelSerializer):
+    thread_count = serializers.IntegerField(source="threads.count", read_only=True)
+
     class Meta:
         model = Board
-        fields = ["slug", "title", "description"]
+        fields = ["slug", "title", "description", "thread_count"]
 
     def validate_slug(self, value):
         if self.instance and value != self.instance.slug:
@@ -22,4 +24,36 @@ class TagSerializer(serializers.ModelSerializer):
     def validate_slug(self, value):
         if self.instance and value != self.instance.slug:
             raise serializers.ValidationError("Tag slug cannot be changed.")
+        return value
+
+
+class ThreadSerializer(serializers.ModelSerializer):
+    board = serializers.SlugRelatedField(
+        slug_field="slug", queryset=Board.objects.all()
+    )
+    tags = serializers.SlugRelatedField(
+        slug_field="slug", queryset=Tag.objects.all(), many=True, required=False
+    )
+
+    class Meta:
+        model = Thread
+        fields = [
+            "id",
+            "board",
+            "name",
+            "subject",
+            "body",
+            "tags",
+            "is_pinned",
+            "is_locked",
+            "created_at",
+            "bumped_at",
+        ]
+        read_only_fields = ["created_at", "bumped_at"]
+
+    def validate_board(self, value):
+        if self.instance and value != self.instance.board:
+            raise serializers.ValidationError(
+                "Thread cannot be moved to another board."
+            )
         return value

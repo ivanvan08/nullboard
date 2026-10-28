@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class Board(models.Model):
@@ -16,3 +17,18 @@ class Tag(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Thread(models.Model):
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="threads")
+    name = models.CharField(max_length=50, blank=True)
+    subject = models.CharField(max_length=150)
+    body = models.TextField()
+    tags = models.ManyToManyField(Tag, blank=True, related_name="threads")
+    is_pinned = models.BooleanField(default=False)
+    is_locked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    bumped_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"#{self.pk} {self.subject}"
