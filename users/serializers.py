@@ -1,5 +1,6 @@
 from django.contrib.auth import password_validation
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 
@@ -60,11 +61,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
         try:
             password_validation.validate_password(password, user=user_candidate)
-        except serializers.ValidationError as e:
+        except DjangoValidationError as e:
             raise serializers.ValidationError({"password": list(e.messages)})
-        except Exception as e:
-            messages = getattr(e, "messages", [str(e)])
-            raise serializers.ValidationError({"password": messages})
 
         return attrs
 
