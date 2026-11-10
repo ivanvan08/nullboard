@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from .exceptions import Conflict
 from .models import Board, Post, Tag, Thread
+from .permissions import IsAdminUserOrReadOnly, IsAuthenticatedOrReadOnly
 from .serializers import (
     BoardSerializer,
     PostSerializer,
@@ -17,6 +18,8 @@ THREAD_ORDERING_FIELDS = ["bumped_at", "created_at", "reply_count"]
 
 
 class BoardListView(APIView):
+    permission_classes = [IsAdminUserOrReadOnly]
+
     def get(self, request):
         boards = Board.objects.all()
         serializer = BoardSerializer(boards, many=True)
@@ -33,6 +36,8 @@ class BoardListView(APIView):
 
 
 class BoardDetailView(APIView):
+    permission_classes = [IsAdminUserOrReadOnly]
+
     def get(self, request, slug):
         board = get_object_or_404(Board, slug=slug)
         serializer = BoardSerializer(board)
@@ -52,6 +57,8 @@ class BoardDetailView(APIView):
 
 
 class TagListView(APIView):
+    permission_classes = [IsAdminUserOrReadOnly]
+
     def get(self, request):
         tags = Tag.objects.all()
         serializer = TagSerializer(tags, many=True)
@@ -68,6 +75,8 @@ class TagListView(APIView):
 
 
 class TagDetailView(APIView):
+    permission_classes = [IsAdminUserOrReadOnly]
+
     def get(self, request, slug):
         tag = get_object_or_404(Tag, slug=slug)
         serializer = TagSerializer(tag)
@@ -93,6 +102,8 @@ class TagDetailView(APIView):
 
 
 class ThreadListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request):
         ordering = request.query_params.get("ordering", "-bumped_at")
         if ordering.removeprefix("-") not in THREAD_ORDERING_FIELDS:
@@ -112,6 +123,8 @@ class ThreadListView(APIView):
 
 
 class ThreadDetailView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, pk):
         thread = get_object_or_404(Thread, pk=pk)
         serializer = ThreadSerializer(thread)
@@ -131,6 +144,8 @@ class ThreadDetailView(APIView):
 
 
 class ThreadPostListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, pk):
         thread = get_object_or_404(Thread, pk=pk)
         posts = thread.posts.order_by("created_at")
@@ -152,6 +167,8 @@ class ThreadPostListView(APIView):
 
 
 class PostDetailView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, pk):
         post = get_object_or_404(Post, pk=pk)
         serializer = PostSerializer(post)
