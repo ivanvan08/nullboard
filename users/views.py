@@ -5,13 +5,31 @@ from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.serializers import (
+    TokenObtainPairSerializer,
+    TokenRefreshSerializer,
+)
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from forum.schemas import ErrorResponse
 
 from .serializers import RegisterSerializer, UserSerializer
 
 logger = logging.getLogger(__name__)
+
+TokenPairResponse = inline_serializer(
+    name="TokenPairResponse",
+    fields={
+        "refresh": serializers.CharField(),
+        "access": serializers.CharField(),
+    },
+)
+
+RefreshResponse = inline_serializer(
+    name="RefreshResponse",
+    fields={"access": serializers.CharField()},
+)
 
 RegisterResponse = inline_serializer(
     name="RegisterResponse",
@@ -70,3 +88,30 @@ class CurrentUserView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+
+class LoginView(TokenObtainPairView):
+    @extend_schema(
+        tags=["auth"],
+        summary="Log in and obtain a JWT pair",
+        description="Returns `access` (15 minutes) and `refresh` (7 days). Wrong credentials answer 401.",
+        request=TokenObtainPairSerializer,
+        responses={200: TokenPairResponse, 401: ErrorResponse},
+        auth=[],
+        operation_id="auth_login",
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+
+class RefreshTokenView(TokenRefreshView):
+    @extend_schema(
+        tags=["auth"],
+        summary="Exchange a refresh token for a new access token",
+        request=TokenRefreshSerializer,
+        responses={200: RefreshResponse, 401: ErrorResponse},
+        auth=[],
+        operation_id="auth_refresh",
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
