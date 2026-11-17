@@ -13,6 +13,7 @@ jsbeautifier==2.0.3
 json5==0.17.3
 pathspec==1.1.1
 PyJWT==2.15.1
+python-dotenv==1.2.4
 PyYAML==6.0.3
 regex==2026.9.29
 ruff==0.17.3
