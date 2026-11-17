@@ -1,3 +1,5 @@
+import logging
+
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,6 +10,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from forum.schemas import ErrorResponse
 
 from .serializers import RegisterSerializer, UserSerializer
+
+logger = logging.getLogger(__name__)
 
 RegisterResponse = inline_serializer(
     name="RegisterResponse",
@@ -38,6 +42,7 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        logger.info("user %s registered", user.username)
 
         # Generate tokens upon registration
         refresh = RefreshToken.for_user(user)

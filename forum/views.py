@@ -1,3 +1,5 @@
+import logging
+
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
@@ -18,6 +20,8 @@ from .serializers import (
 )
 
 THREAD_ORDERING_FIELDS = ["bumped_at", "created_at", "reply_count"]
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
@@ -57,7 +61,8 @@ class BoardListView(APIView):
             raise Conflict(f"Board /{slug}/ already exists. Choose another slug.")
         serializer = BoardSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        board = serializer.save()
+        logger.info("board /%s/ created by %s", board.slug, request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -108,6 +113,7 @@ class BoardDetailView(APIView):
 
     def delete(self, request, slug):
         board = get_object_or_404(Board, slug=slug)
+        logger.info("board /%s/ deleted by %s", board.slug, request.user)
         board.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -149,7 +155,8 @@ class TagListView(APIView):
             raise Conflict(f"Tag '{slug}' already exists. Choose another slug.")
         serializer = TagSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        tag = serializer.save()
+        logger.info("tag #%s created by %s", tag.slug, request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -212,6 +219,7 @@ class TagDetailView(APIView):
                 f"Tag '{slug}' cannot be deleted: it is used by {thread_count} "
                 "thread(s). Remove the tag from these threads first."
             )
+        logger.info("tag #%s deleted by %s", tag.slug, request.user)
         tag.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -261,7 +269,8 @@ class ThreadListView(APIView):
     def post(self, request):
         serializer = ThreadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        thread = serializer.save()
+        logger.info("thread #%s created in /%s/ by %s", thread.pk, thread.board.slug, request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -308,6 +317,7 @@ class ThreadDetailView(APIView):
 
     def delete(self, request, pk):
         thread = get_object_or_404(Thread, pk=pk)
+        logger.info("thread #%s deleted by %s", thread.pk, request.user)
         thread.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -351,6 +361,7 @@ class ThreadPostListView(APIView):
         serializer = PostSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         post = serializer.save(thread=thread)
+        logger.info("post #%s added to thread #%s by %s", post.pk, thread.pk, request.user)
         thread.bumped_at = post.created_at
         thread.save(update_fields=["bumped_at"])
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -402,5 +413,6 @@ class PostDetailView(APIView):
 
     def delete(self, request, pk):
         post = get_object_or_404(Post, pk=pk)
+        logger.info("post #%s deleted by %s", post.pk, request.user)
         post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
