@@ -6,7 +6,9 @@ django-cors-headers==4.9.0
 djangorestframework==3.18.3
 djangorestframework_simplejwt==5.5.1
 djlint==1.47.1
+drf-spectacular==0.30.0
 EditorConfig==0.17.1
+inflection==0.5.1
 jsbeautifier==2.0.3
 json5==0.17.3
 pathspec==1.1.1
@@ -15,3 +17,4 @@ PyYAML==6.0.3
 regex==2026.9.29
 ruff==0.17.3
 sqlparse==0.6.0
+uritemplate==4.2.0

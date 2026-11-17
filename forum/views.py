@@ -1,5 +1,7 @@
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,6 +9,7 @@ from rest_framework.views import APIView
 from .exceptions import Conflict
 from .models import Board, Post, Tag, Thread
 from .permissions import IsAdminUserOrReadOnly, IsAuthenticatedOrReadOnly
+from .schemas import ErrorResponse
 from .serializers import (
     BoardSerializer,
     PostSerializer,
@@ -17,6 +20,29 @@ from .serializers import (
 THREAD_ORDERING_FIELDS = ["bumped_at", "created_at", "reply_count"]
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["boards"],
+        summary="List boards",
+        responses={200: BoardSerializer(many=True)},
+        auth=[],
+        operation_id="boards_list",
+    ),
+    post=extend_schema(
+        tags=["boards"],
+        summary="Create a board",
+        description="Staff only. The slug must be unique.",
+        request=BoardSerializer,
+        responses={
+            201: BoardSerializer,
+            400: ErrorResponse,
+            401: ErrorResponse,
+            403: ErrorResponse,
+            409: ErrorResponse,
+        },
+        operation_id="boards_create",
+    ),
+)
 class BoardListView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
@@ -35,6 +61,36 @@ class BoardListView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["boards"],
+        summary="Retrieve a board",
+        responses={200: BoardSerializer, 404: ErrorResponse},
+        auth=[],
+        operation_id="board_retrieve",
+    ),
+    patch=extend_schema(
+        tags=["boards"],
+        summary="Update a board",
+        description="Staff only. The slug cannot be changed.",
+        request=BoardSerializer,
+        responses={
+            200: BoardSerializer,
+            400: ErrorResponse,
+            401: ErrorResponse,
+            403: ErrorResponse,
+            404: ErrorResponse,
+        },
+        operation_id="board_partial_update",
+    ),
+    delete=extend_schema(
+        tags=["boards"],
+        summary="Delete a board",
+        description="Staff only.",
+        responses={204: None, 401: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+        operation_id="board_destroy",
+    ),
+)
 class BoardDetailView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
@@ -56,6 +112,29 @@ class BoardDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["tags"],
+        summary="List tags",
+        responses={200: TagSerializer(many=True)},
+        auth=[],
+        operation_id="tags_list",
+    ),
+    post=extend_schema(
+        tags=["tags"],
+        summary="Create a tag",
+        description="Staff only. The slug must be unique.",
+        request=TagSerializer,
+        responses={
+            201: TagSerializer,
+            400: ErrorResponse,
+            401: ErrorResponse,
+            403: ErrorResponse,
+            409: ErrorResponse,
+        },
+        operation_id="tags_create",
+    ),
+)
 class TagListView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
@@ -74,6 +153,42 @@ class TagListView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["tags"],
+        summary="Retrieve a tag",
+        responses={200: TagSerializer, 404: ErrorResponse},
+        auth=[],
+        operation_id="tag_retrieve",
+    ),
+    patch=extend_schema(
+        tags=["tags"],
+        summary="Update a tag",
+        description="Staff only. The slug cannot be changed.",
+        request=TagSerializer,
+        responses={
+            200: TagSerializer,
+            400: ErrorResponse,
+            401: ErrorResponse,
+            403: ErrorResponse,
+            404: ErrorResponse,
+        },
+        operation_id="tag_partial_update",
+    ),
+    delete=extend_schema(
+        tags=["tags"],
+        summary="Delete a tag",
+        description="Staff only. A tag still used by threads answers 409.",
+        responses={
+            204: None,
+            401: ErrorResponse,
+            403: ErrorResponse,
+            404: ErrorResponse,
+            409: ErrorResponse,
+        },
+        operation_id="tag_destroy",
+    ),
+)
 class TagDetailView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
@@ -101,6 +216,34 @@ class TagDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["threads"],
+        summary="List threads",
+        description=(
+            "Public endpoint. `ordering` accepts bumped_at, created_at and "
+            "reply_count; prefix with `-` for descending order."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "ordering",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                default="-bumped_at",
+            )
+        ],
+        responses={200: ThreadSerializer(many=True), 400: ErrorResponse},
+        auth=[],
+    ),
+    post=extend_schema(
+        tags=["threads"],
+        summary="Create a thread",
+        description="Requires a JWT access token. `board` and `tags` are board/tag slugs.",
+        request=ThreadSerializer,
+        responses={201: ThreadSerializer, 400: ErrorResponse, 401: ErrorResponse},
+    ),
+)
 class ThreadListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
@@ -122,6 +265,32 @@ class ThreadListView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["threads"],
+        summary="Retrieve a thread",
+        responses={200: ThreadSerializer, 404: ErrorResponse},
+        auth=[],
+    ),
+    patch=extend_schema(
+        tags=["threads"],
+        summary="Update a thread",
+        description="Requires a JWT access token. A thread cannot be moved to another board.",
+        request=ThreadSerializer,
+        responses={
+            200: ThreadSerializer,
+            400: ErrorResponse,
+            401: ErrorResponse,
+            404: ErrorResponse,
+        },
+    ),
+    delete=extend_schema(
+        tags=["threads"],
+        summary="Delete a thread",
+        description="Deletes the thread together with its posts. Requires a JWT access token.",
+        responses={204: None, 401: ErrorResponse, 404: ErrorResponse},
+    ),
+)
 class ThreadDetailView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
@@ -143,6 +312,27 @@ class ThreadDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["posts"],
+        summary="List replies of a thread",
+        responses={200: PostSerializer(many=True), 404: ErrorResponse},
+        auth=[],
+    ),
+    post=extend_schema(
+        tags=["posts"],
+        summary="Reply to a thread",
+        description="Requires a JWT access token. A locked thread answers 409.",
+        request=PostSerializer,
+        responses={
+            201: PostSerializer,
+            400: ErrorResponse,
+            401: ErrorResponse,
+            404: ErrorResponse,
+            409: ErrorResponse,
+        },
+    ),
+)
 class ThreadPostListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
@@ -166,6 +356,35 @@ class ThreadPostListView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["posts"],
+        summary="Retrieve a post",
+        responses={200: PostSerializer, 404: ErrorResponse},
+        auth=[],
+        operation_id="post_retrieve",
+    ),
+    patch=extend_schema(
+        tags=["posts"],
+        summary="Update a post",
+        description="Requires a JWT access token.",
+        request=PostSerializer,
+        responses={
+            200: PostSerializer,
+            400: ErrorResponse,
+            401: ErrorResponse,
+            404: ErrorResponse,
+        },
+        operation_id="post_partial_update",
+    ),
+    delete=extend_schema(
+        tags=["posts"],
+        summary="Delete a post",
+        description="Requires a JWT access token.",
+        responses={204: None, 401: ErrorResponse, 404: ErrorResponse},
+        operation_id="post_destroy",
+    ),
+)
 class PostDetailView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
