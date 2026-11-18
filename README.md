@@ -52,11 +52,18 @@ JSON і не будує HTML-сторінок. Клієнт — окремий �
   додавати, не ламаючи тих, хто вже користується попередньою.
 - Формат тіла запиту і відповіді: **JSON** (`Content-Type: application/json`).
   Картинки в тредах і постах поки не підтримуються, див. «Поки не реалізовано».
-- Авторизація (поки не реалізована): **токен**. `POST /api/v1/auth/login/`
-  повертатиме ключ, далі клієнт надсилатиме його в заголовку
-  `Authorization: Token <ключ>`. Сервер не зберігатиме нічого про попередні
-  запити: ні сесій, ні cookie, ні CSRF. Кожен запит нестиме все, що потрібно
-  для перевірки прав. Доки авторизації немає, усі ендпоінти нижче відкриті.
+- Авторизація: **JWT (JSON Web Token)**. Після реєстрації чи логіну клієнт
+  отримує пару токенів: короткоживучий `access` (15 хв) і довгоживучий `refresh` (7 днів).
+  Для доступу до захищених ендпоінтів клієнт передає заголовок:
+  `Authorization: Bearer <access_token>`.
+  Коли термін дії `access` закінчується, клієнт відправляє `POST /api/v1/auth/refresh/`
+  з `refresh` токеном для отримання нового `access` без повторного введення логіну/паролю.
+  Сервер безсесійний (stateless): ні сесій, ні cookies.
+- Права доступу:
+  - Публічний доступ (`AllowAny`): перегляд списку дошок, тегів, тредів і відповідей (`GET`).
+  - Авторизовані користувачі (`IsAuthenticated`): створення та редагування тредів і відповідей (`POST`, `PATCH`, `DELETE`).
+  - Адміністратори (`IsAdminUser`): створення, редагування та видалення дошок і тегів.
+  - Без прав повертається `401 Unauthorized` (якщо токен відсутній/недійсний) або `403 Forbidden` (якщо прав недостатньо).
 - Сортування: параметр `ordering`, знак мінус означає «спадання».
 - Помилки мають однаковий формат для всіх ендпоінтів. Текст завжди лежить у
   `message`. Якщо помилка стосується конкретних полів, поруч є `fields`: для
@@ -66,9 +73,20 @@ JSON і не будує HTML-сторінок. Клієнт — окремий �
 |---|---|---|
 | `400` | некоректні дані | `{"message": "Invalid input.", "fields": {"subject": ["This field is required."]}}` |
 | `400` | тіло запиту не є коректним JSON | `{"message": "JSON parse error - ..."}` |
+| `401` | запит без валідного токена | `{"message": "Authentication credentials were not provided."}` |
+| `403` | недостатньо прав (не адмін) | `{"message": "You do not have permission to perform this action."}` |
 | `404` | об'єкта немає | `{"message": "No Thread matches the given query."}` |
 | `405` | метод не підтримується цим ендпоінтом | `{"message": "Method \"PUT\" not allowed."}` |
 | `409` | конфлікт: запит правильний, але суперечить поточному стану | `{"message": "Thread #12 is locked. New replies are not allowed."}` |
+
+### Аутентифікація та користувачі
+
+| Метод | Шлях | Що робить | Запит | Відповідь |
+|---|---|---|---|---|
+| `POST` | `/api/v1/auth/register/` | реєстрація нового користувача | `{"username", "email", "password", "password_confirmation", "first_name"?, "last_name"?}` | `201` об'єкт юзера + `access` + `refresh`, `400` помилки валідації |
+| `POST` | `/api/v1/auth/login/` | логін та отримання токенів | `{"username", "password"}` | `200` `{"access", "refresh"}`, `401` якщо дані невірні |
+| `POST` | `/api/v1/auth/refresh/` | оновлення access токена | `{"refresh"}` | `200` `{"access"}`, `401` якщо refresh невалідний |
+| `GET` | `/api/v1/auth/me/` | дані поточного авторизованого користувача | заголовок `Authorization: Bearer <access>` | `200` профіль юзера, `401` без токена |
 
 Чому `409`, а не `400`: у цих випадках самі дані правильні, проблема в тому,
 що вже лежить на сервері (код зайнятий, тред закритий, теґ використовується).
@@ -125,19 +143,6 @@ JSON і не будує HTML-сторінок. Клієнт — окремий �
 | `GET` | `/api/v1/posts/{id}/` | один пост | — | `200`, `404` |
 | `PATCH` | `/api/v1/posts/{id}/` | редагувати пост | `{"body"?, "name"?}` | `200`, `400`, `404` |
 | `DELETE` | `/api/v1/posts/{id}/` | видалити пост | — | `204`, `404` |
-
-### Акаунти і профілі (поки не реалізовано)
-
-| Метод | Шлях | Що робить і де використовується | Запит | Відповідь |
-|---|---|---|---|---|
-| `POST` | `/api/v1/auth/register/` | реєстрація. Сторінка «Реєстрація» | `{"username", "email", "password"}` | `201` профіль, `400` |
-| `POST` | `/api/v1/auth/login/` | вхід. Сторінка «Вхід». Повертає ключ, яким клієнт користуватиметься далі | `{"username", "password"}` | `200` `{"token": "...", "user": {...}}`, `400` |
-| `POST` | `/api/v1/auth/logout/` | вихід. Кнопка в хедері. Видаляє ключ із бази, тож він більше не працює | — | `204`, `401` |
-| `GET` | `/api/v1/auth/me/` | хто зараз увійшов. Хедер і профіль | — | `200` профіль, `401` |
-| `PATCH` | `/api/v1/auth/me/` | редагувати свої дані. Сторінка профілю | `{"email"?, "first_name"?, "last_name"?, "password"?}` | `200`, `400`, `401` |
-| `GET` | `/api/v1/users/{id}/` | публічний профіль автора | — | `200` `{"id", "username", "thread_count", "post_count", "date_joined"}`, `404` |
-| `GET` | `/api/v1/users/{id}/threads/` | треди автора. Сторінка автора | `?page=` | `200` `{"count", "next", "previous", "results": [...]}`, `404` |
-| `GET` | `/api/v1/users/{id}/posts/` | пости автора. Сторінка автора | `?page=` | `200` `{"count", "next", "previous", "results": [...]}`, `404` |
 
 ### Кошик і добірки (поки не реалізовано)
 
@@ -209,8 +214,6 @@ JSON і не будує HTML-сторінок. Клієнт — окремий �
 
 Перенесено на наступні етапи:
 
-- авторизація, акаунти, профілі і права: хто може редагувати й видаляти
-  (`401`, `403`, «лише автор або модерація»);
 - кошик і добірки;
 - картинки в тредах і постах (`multipart/form-data`);
 - пошук і фільтри стрічки: `?search=`, `?board=`, `?tag=`, `?is_pinned=`,
@@ -244,17 +247,29 @@ JSON і не будує HTML-сторінок. Клієнт — окремий �
    python -m pip install -r requirements.txt
    ```
 
-   Для перевірки стилю коду потрібні ще інструменти розробки:
-   `python -m pip install -r requirements-dev.txt`, далі
-   `python check_submission.py`.
+   **2.1.** Інструменти розробки - pytest, coverage і лінтери - встановлюються окремо:
 
-3. Створити базу даних:
+   ```bash
+   python -m pip install -r requirements-dev.txt
+   ```
+
+3. Створити файл `.env` зі змінними середовища:
+
+   ```bash
+   cp .env.example .env
+   python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
+   ```
+
+   Отриманий ключ вписати у `SECRET_KEY` у файлі `.env`. Перелік змінних —
+   у розділі «Змінні середовища».
+
+4. Створити базу даних:
 
    ```bash
    python manage.py migrate
    ```
 
-4. Запустити сервер:
+5. Запустити сервер:
 
    ```bash
    python manage.py runserver
@@ -263,6 +278,20 @@ JSON і не будує HTML-сторінок. Клієнт — окремий �
 API буде доступне за адресою `http://127.0.0.1:8000/api/v1/`, наприклад
 `http://127.0.0.1:8000/api/v1/boards/`. Запити з браузера дозволено лише
 фронтенду з `http://localhost:3000` і `http://127.0.0.1:3000` (CORS).
+
+Усі команди разом - від порожньої теки до запущеного сервера:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+cp .env.example .env
+python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
+# вписати отриманий ключ у SECRET_KEY файлу .env
+python manage.py migrate
+python manage.py runserver
+```
 
 ## Postman
 
@@ -275,3 +304,103 @@ API буде доступне за адресою `http://127.0.0.1:8000/api/v1/
 цілком (**Run collection**). Запити йдуть по черзі: пізніші використовують
 об'єкти, створені раніше, а тека `Cleanup` видаляє все створене. Кожен запит
 перевіряє очікуваний код відповіді.
+
+## Тести
+
+Тести написані на pytest із плагіном pytest-django. Усі вони працюють на
+окремій тестовій базі, яку pytest-django створює перед прогоном і знищує
+після, тому робоча `db.sqlite3` не змінюється.
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+Очікуваний результат: `43 passed`. Фікстури (`api_client`, `user`, `admin`,
+`auth_client`, `admin_client`, `board`, `tag`, `thread`, `locked_thread`,
+`post`) лежать у `conftest.py` у корені репозиторію.
+
+Що покрито:
+
+- `forum/tests/test_thread_api.py`: треди й пости - список і деталь, створення
+  з токеном і без, невалідні дані, неіснуючі id, редагування, видалення,
+  відповідь у закритий тред (409), логін із невірним паролем (401);
+- `forum/tests/test_board_permissions.py`: дошки й теги - публічне читання,
+  401 без токена, 403 для звичайного користувача, 201/200 для адміністратора,
+  409 на дубль слага і на видалення тега, який використовується.
+
+`python manage.py test` запускає лише старі тести в стилі `unittest`
+(`users/tests.py`, 10 тестів) і не бачить нових - тому для повного прогону
+використовуйте саме `pytest`.
+
+### Покриття
+
+```bash
+python -m coverage run -m pytest
+python -m coverage report -m --include="forum/*,users/*,config/*" --omit="*/migrations/*,*/tests/*,users/tests.py"
+```
+
+Зараз: **90%** робочого коду (384 рядки, 39 не покритих). Найнижче -
+`forum/views.py` (84%): не покриті `PATCH` і `DELETE` дошки, створення тега
+через `TagListView` та читання одного тега.
+
+## Документація API
+
+Схема генерується автоматично бібліотекою `drf-spectacular` з коду, тому
+документація не розходиться з реалізацією.
+
+- Swagger UI: `http://127.0.0.1:8000/api/docs/`
+- OpenAPI-схема (YAML): `http://127.0.0.1:8000/api/schema/`
+
+![Swagger UI](docs/swagger.jpg)
+
+Локально перевірити, що схема збирається без помилок:
+
+```bash
+python manage.py spectacular --file schema.yml --validate
+```
+
+Ендпоінти описані анотаціями `@extend_schema` у `forum/views.py` і
+`users/views.py`: для кожного методу вказані тіло запиту, коди відповідей і
+вимога автентифікації. Анотації потрібні тому, що серіалізатори створюються
+всередині методів, і drf-spectacular не може визначити їх сам.
+
+## Логування
+
+Налаштування - у `config/settings.py` (блок `LOGGING`): вивід у консоль,
+формат `рівень час logger повідомлення`.
+
+| Що | Рівень |
+|---|---|
+| створення й видалення дощок, тегів, тредів, постів (з id і нікнеймом) | `INFO`, `forum.views` |
+| реєстрація користувача | `INFO`, `users.views` |
+| відмови `401`, `403` і конфлікти `409` | `WARNING`, `forum.exceptions` |
+| помилки сервера | `ERROR`, `django.request` |
+
+Логуються метод, шлях, код відповіді, клас винятку, id об'єкта й нікнейм.
+Паролі, токени й заголовки не логуються ніколи.
+
+## Змінні середовища
+
+Секрети не зберігаються в коді: `config/settings.py` читає їх із середовища
+через `python-dotenv`. Файл `.env` доданий до `.gitignore`, у репозиторії
+лежить лише шаблон `.env.example`.
+
+| Змінна | Обов'язкова | Що означає |
+|---|---|---|
+| `SECRET_KEY` | так | ключ підпису Django і JWT; без нього проєкт завершується з `ImproperlyConfigured` |
+| `DEBUG` | ні | `True` вмикає debug-сторінки Django; типово `False` |
+| `ALLOWED_HOSTS` | ні | список хостів через кому; типово порожній |
+| `DB_NAME` | ні | ім'я файлу SQLite; типово `db.sqlite3` |
+
+Приклад підготовки оточення:
+
+```bash
+cp .env.example .env
+python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
+# вписати ключ у SECRET_KEY файлу .env
+```
+
+Проєкт використовує SQLite, тому пароля бази даних немає. Для PostgreSQL
+достатньо замінити блок `DATABASES` у `config/settings.py` на читання
+`DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` з `.env`.
